@@ -11,6 +11,7 @@ class Board(models.Model):
     
     def __str__(self):
         return f'Board{self.pk}'
+        # return self.title
 
 class Comment(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
