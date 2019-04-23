@@ -1,6 +1,7 @@
 # from django.test import TestCase
 from test_plus.test import TestCase
 from django.conf import settings
+from django.urls import reverse
 from .models import Board
 from .forms import BoardForm
 
@@ -34,12 +35,13 @@ class BoardModelTest(TestCase):
         data ={'title':'제목'}
         self.assertEqual(BoardForm(data).is_valid(), False)
     
+        
 #3. View test
 class BoardViewTest(TestCase):
     # 반복되기 떄문에 먼저 셋업해준다.
     # 공통적인 given 상황을 구성하기 유용하다.
     def setUp(self):
-        user = self.make_user(username='test', password='qawsdrf!')
+        self.user = self.make_user(username='test', password='qawsdrf!')
     
     # create test 에서의 포인트는 form을 제대로 주느냐이다. 
     # 가장 기본은 get_check_200
@@ -74,4 +76,67 @@ class BoardViewTest(TestCase):
             response = self.post('boards:create', data=data)
             self.assertContains(response, '')
             # form.is_valid()를 통과하지 못해서 튕겨져 나옴.
+    # detail 페이지가 제대로 출력되는지 확인
+    def test_05_detail_contains(self):
+        # given
+        board = Board.objects.create(title='제목', content='내용', user=self.user)
+        # board = Board.objects.create(title='제목', content='내용', user_id=1)
+        # when 
+        self.get_check_200('boards:detail', board_pk=board.pk)
+        # then
+        self.assertResponseContains(board.title, html=False)
+        self.assertResponseContains(board.content, html=False)
     
+    def test_06_detail_template(self):
+        # given
+        board = Board.objects.create(title='제목', content='내용', user=self.user)
+        # when 
+        response = self.get_check_200('boards:detail', board_pk=board.pk)
+        # then
+        self.assertTemplateUsed(response, 'boards/detail.html')
+    
+    def test_07_get_index(self):
+        # given when then
+        self.get_check_200('boards:index')
+    
+    def test_08_index_template(self):
+        # when then
+        response = self.get_check_200('boards:index')
+        self.assertTemplateUsed(response, 'boards/index.html')
+    
+    def test_09_index_queryset(self):
+        # given - 글 2개 작성
+        Board.objects.create(title='제목', content='내용', user=self.user)
+        Board.objects.create(title='제목', content='내용', user=self.user)
+        boards = Board.objects.order_by('-pk')
+        #when
+        response = self.get_check_200('boards:index')
+        #then
+        self.assertQuerysetEqual(response.context['boards'], map(repr, boards))
+    
+    def test_10_delete_get(self):
+        board = Board.objects.create(title='제목', content='내용', user=self.user)
+        with self.login(username='test', password='qawsdrf!'):
+            self.get_check_200('boards:delete', board_pk=board.pk)
+    
+    def test_11_delete_post(self):
+        board = Board.objects.create(title='제목', content='내용', user=self.user)
+        with self.login(username='test', password='qawsdrf!'):
+            self.post('boards:delete', board_pk=board.pk)
+            self.assertEqual(Board.objects.count(), 0)
+    
+    def test_12_delete_redirect(self):
+        board = Board.objects.create(title='제목', content='내용', user=self.user)
+        with self.login(username='test', password='qawsdrf!'):
+            response = self.post('boards:delete', board_pk=board.pk)
+            # then
+            self.assertRedirect(response, reverse('boards:index'))
+    
+    def test_13_get_update(self):
+        board = Board.objects.create(title='제목', content='내용', user=self.user)
+        with self.login(username='test', password='qawsdrf!'):
+            response = self.get_check_200('boards:update', board.pk)
+            self.assertEqual(response.context['form'].instance.pk, board.pk)
+    
+    def test_14_get_update_login_required(self):
+        self.assertRequired('boards:update', board_pk=1)
